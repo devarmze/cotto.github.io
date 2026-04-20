@@ -357,7 +357,10 @@ input:focus,select:focus{border-color:var(--accent)}
           Inserisci l'URL del tuo backend su Render.com dopo averlo deployato.<br>
           Lascia vuoto per lavorare offline (dati solo nel browser).
         </div>
-        <button class="btn btn-secondary" style="margin-top:.8rem" onclick="testApi()">🔌 Testa connessione</button>
+        <div style="display:flex;gap:.5rem;margin-top:.8rem">
+          <button class="btn btn-secondary" style="flex:1" onclick="applyApi()">💾 Salva e carica coupon</button>
+          <button class="btn btn-secondary" style="width:auto;padding:.6rem 1rem" onclick="testApi()">🔌 Test</button>
+        </div>
       </div>
     </div>
 
@@ -474,9 +477,31 @@ let scanHistory = [];
 const d = new Date(); d.setDate(d.getDate()+30);
 document.getElementById('f-scad').value = d.toISOString().split('T')[0];
 
-checkApi();
-renderList();
-updateStats();
+// Auto-carica i coupon dal backend se l'URL è configurato
+async function init(){
+  renderList();
+  updateStats();
+  if(API_URL){
+    const badge=document.getElementById('api-status');
+    badge.textContent='API avvio...';
+    badge.className='api-badge';
+    // Mostra stato "in riscaldamento" per Render free tier
+    toast('Connessione al backend... (può richiedere fino a 30s al primo avvio)');
+    const data = await apiFetch('/api/coupons');
+    if(data&&Array.isArray(data)){
+      coupons=data; saveCoupons(); renderList(); updateStats();
+      badge.textContent='API online'; badge.className='api-badge';
+      toast(\`✓ \${data.length} coupon caricati\`);
+    } else {
+      badge.textContent='API offline'; badge.className='api-badge err';
+      toast('Backend non raggiungibile — modalità offline','err');
+    }
+  } else {
+    document.getElementById('api-status').textContent='API offline';
+    document.getElementById('api-status').className='api-badge err';
+  }
+}
+init();
 
 // ── Views ────────────────────────────────
 function showView(v){
@@ -489,14 +514,31 @@ function showView(v){
 }
 
 // ── API helpers ──────────────────────────
-async function apiFetch(path, opts={}){
+async function apiFetch(path, opts={}, retries=2){
   if(!API_URL) return null;
-  try{
-    const r = await fetch(API_URL.replace(/\/$/,'')+path, {
-      headers:{'Content-Type':'application/json'}, ...opts
-    });
-    return await r.json();
-  }catch(e){console.warn('API error',e);return null}
+  for(let attempt=0; attempt<=retries; attempt++){
+    try{
+      const controller = new AbortController();
+      // Primo tentativo: 8s (Render potrebbe essere in cold start)
+      // Tentativi successivi: 12s
+      const timeout = setTimeout(()=>controller.abort(), attempt===0 ? 8000 : 12000);
+      const r = await fetch(API_URL.replace(/\/$/,'')+path, {
+        headers:{'Content-Type':'application/json'},
+        signal: controller.signal,
+        ...opts
+      });
+      clearTimeout(timeout);
+      return await r.json();
+    }catch(e){
+      if(attempt<retries){
+        // Render cold start: aspetta 3s e riprova
+        await new Promise(res=>setTimeout(res,3000));
+      } else {
+        console.warn('API error dopo',retries+1,'tentativi:',e);
+        return null;
+      }
+    }
+  }
 }
 
 async function checkApi(){
@@ -518,6 +560,23 @@ async function testApi(){
 function saveApi(){
   API_URL = document.getElementById('api-url').value.trim();
   localStorage.setItem('api_url', API_URL);
+}
+
+async function applyApi(){
+  saveApi();
+  if(!API_URL){toast('Inserisci un URL valido','err');return}
+  toast('Connessione in corso...');
+  const data = await apiFetch('/api/coupons');
+  if(data&&Array.isArray(data)){
+    coupons=data; saveCoupons(); renderList(); updateStats();
+    document.getElementById('api-status').textContent='API online';
+    document.getElementById('api-status').className='api-badge';
+    toast(\`✓ \${data.length} coupon caricati\`);
+  } else {
+    document.getElementById('api-status').textContent='API offline';
+    document.getElementById('api-status').className='api-badge err';
+    toast('Backend non raggiungibile','err');
+  }
 }
 
 async function loadFromApi(){
@@ -767,12 +826,27 @@ async function delCoupon(id){
 async function toggleCamera(){
   if(scanActive){stopCamera();return}
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'environment',width:{ideal:640},height:{ideal:640}}
-    });
+    // Su mobile: usa camera posteriore con risoluzione alta per leggere meglio i QR
+    const constraints = {
+      video:{
+        facingMode:{ideal:'environment'},
+        width:{ideal:1280, min:640},
+        height:{ideal:720, min:480}
+      }
+    };
+    let stream;
+    try{
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    }catch(e){
+      // Fallback: qualsiasi camera disponibile
+      stream = await navigator.mediaDevices.getUserMedia({video:true});
+    }
     camStream=stream;
     const vid=document.getElementById('cam-video');
-    vid.srcObject=stream; await vid.play();
+    vid.srcObject=stream;
+    // Aspetta che il video sia pronto prima di avviare lo scan
+    await new Promise(res=>{ vid.onloadedmetadata=res; vid.srcObject=stream; });
+    await vid.play();
     scanActive=true;
     document.getElementById('btn-cam').textContent='⏹ Ferma Scanner';
     document.getElementById('scan-hint').textContent='Punta il QR code — rilevamento automatico';
@@ -792,26 +866,42 @@ function stopCamera(){
 function startScanLoop(){
   const vid=document.getElementById('cam-video');
   const canvas=document.getElementById('cam-canvas');
-  const ctx=canvas.getContext('2d');
-  let lastCode='';let cooldown=0;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  let lastCode='';
+  let lastScan=0;
+  const INTERVAL=250; // scan ogni 250ms - più affidabile di setInterval su mobile
 
-  scanInterval=setInterval(()=>{
-    if(!scanActive||vid.readyState<2) return;
-    if(cooldown>0){cooldown--;return}
-    canvas.width=vid.videoWidth;canvas.height=vid.videoHeight;
-    ctx.drawImage(vid,0,0);
-    const img=ctx.getImageData(0,0,canvas.width,canvas.height);
-    const qr=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
-    if(qr){
-      let code=qr.data;
-      // Prova a parsare il JSON del QR
-      try{const j=JSON.parse(qr.data);code=j.code||code}catch(e){}
-      if(code!==lastCode){
-        lastCode=code; cooldown=30; // pausa ~3s
+  function tick(ts){
+    if(!scanActive) return;
+    requestAnimationFrame(tick);
+    if(ts-lastScan < INTERVAL) return;
+    if(vid.readyState < 2 || vid.videoWidth===0) return;
+    lastScan=ts;
+
+    // Usa dimensione reale del video (fondamentale su mobile)
+    const w=vid.videoWidth, h=vid.videoHeight;
+    canvas.width=w; canvas.height=h;
+    ctx.drawImage(vid,0,0,w,h);
+    const img=ctx.getImageData(0,0,w,h);
+
+    // attemptBoth = prova normale + invertito (gestisce QR scuri su sfondo chiaro e viceversa)
+    const qr=jsQR(img.data,w,h,{inversionAttempts:'attemptBoth'});
+    if(qr&&qr.data){
+      let code=qr.data.trim();
+      // Estrai il campo "code" se è JSON del nostro sistema
+      try{const j=JSON.parse(code);if(j.code)code=j.code;}catch(e){}
+      if(code && code!==lastCode){
+        lastCode=code;
+        // Feedback visivo: bordo verde sul frame
+        document.querySelector('.scan-frame').style.borderColor='var(--ok)';
+        setTimeout(()=>{ document.querySelector('.scan-frame').style.borderColor='var(--accent2)'; },800);
         runValidation(code);
+        // Reset lastCode dopo 4s per permettere rilettura
+        setTimeout(()=>{ lastCode=''; },4000);
       }
     }
-  },100);
+  }
+  requestAnimationFrame(tick);
 }
 
 function validateManual(){
