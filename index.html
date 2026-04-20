@@ -491,7 +491,7 @@ async function init(){
     if(data&&Array.isArray(data)){
       coupons=data; saveCoupons(); renderList(); updateStats();
       badge.textContent='API online'; badge.className='api-badge';
-      toast(\`✓ \${data.length} coupon caricati\`);
+      toast(`✓ ${data.length} coupon caricati`);
     } else {
       badge.textContent='API offline'; badge.className='api-badge err';
       toast('Backend non raggiungibile — modalità offline','err');
@@ -571,7 +571,7 @@ async function applyApi(){
     coupons=data; saveCoupons(); renderList(); updateStats();
     document.getElementById('api-status').textContent='API online';
     document.getElementById('api-status').className='api-badge';
-    toast(\`✓ \${data.length} coupon caricati\`);
+    toast(`✓ ${data.length} coupon caricati`);
   } else {
     document.getElementById('api-status').textContent='API offline';
     document.getElementById('api-status').className='api-badge err';
