@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CouponQR</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- jsQR per la lettura dei QR dalla fotocamera -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+<style>
+:root {
+  --bg:#080808; --s1:#111; --s2:#191919; --s3:#222;
+  --b1:#2a2a2a; --b2:#3a3a3a;
+  --tx:#f0ede8; --muted:#666; --muted2:#444;
+  --accent:#ff4500; --accent2:#ffb300;
+  --ok:#00e676; --warn:#ffb300; --err:#ff1744; --info:#29b6f6;
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh}
+
+/* ── Topbar ── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 1.5rem;height:56px;
+  background:rgba(8,8,8,.9);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--b1);
+  position:sticky;top:0;z-index:200;
+}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:.08em;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.tabs{display:flex;gap:4px}
+.tab{padding:.35rem .9rem;border-radius:6px;font-size:.8rem;font-weight:600;
+  cursor:pointer;border:none;background:none;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.06em;transition:all .15s}
+.tab.on{background:var(--s3);color:var(--tx)}
+.tab:hover:not(.on){color:var(--tx)}
+.api-badge{font-size:.65rem;padding:.15rem .5rem;border-radius:4px;
+  background:rgba(0,230,118,.1);color:var(--ok);border:1px solid rgba(0,230,118,.2);
+  margin-left:.5rem}
+.api-badge.err{background:rgba(255,23,68,.1);color:var(--err);border-color:rgba(255,23,68,.2)}
+
+/* ── Views ── */
+.view{display:none;padding:1.5rem;max-width:1200px;margin:0 auto}
+.view.on{display:block}
+
+/* ── Layout generatore ── */
+.gen-grid{display:grid;grid-template-columns:380px 1fr;gap:1.5rem}
+@media(max-width:800px){.gen-grid{grid-template-columns:1fr}}
+
+/* ── Panel ── */
+.panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:1.4rem}
+.panel-title{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:.12em;
+  color:var(--accent);margin-bottom:1.2rem;display:flex;align-items:center;gap:.5rem}
+.panel-title::after{content:'';flex:1;height:1px;background:var(--b1)}
+
+/* ── Form ── */
+.field{margin-bottom:1rem}
+label{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--muted);margin-bottom:.35rem;font-weight:500}
+input,select,textarea{width:100%;background:var(--s2);border:1px solid var(--b1);
+  border-radius:7px;color:var(--tx);padding:.6rem .85rem;
+  font-family:'DM Sans',sans-serif;font-size:.9rem;outline:none;transition:border-color .2s}
+input:focus,select:focus{border-color:var(--accent)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+.color-wrap{display:flex;align-items:center;gap:.6rem;background:var(--s2);
+  border:1px solid var(--b1);border-radius:7px;padding:.45rem .75rem}
+.color-wrap input[type=color]{width:30px;height:30px;border:none;
+  border-radius:4px;padding:0;background:none;cursor:pointer}
+.color-wrap span{font-size:.85rem}
+
+/* ── Buttons ── */
+.btn{display:block;width:100%;padding:.8rem;border:none;border-radius:8px;
+  font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:.08em;
+  cursor:pointer;transition:all .18s;text-transform:uppercase}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#ff7c00);color:#fff}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,69,0,.35)}
+.btn-secondary{background:var(--s2);border:1px solid var(--b1);color:var(--tx);
+  margin-top:.5rem;font-size:.82rem;font-family:'DM Sans',sans-serif;font-weight:600}
+.btn-secondary:hover{border-color:var(--accent2);color:var(--accent2)}
+.btn-sm{display:inline-block;width:auto;padding:.35rem .85rem;
+  font-size:.75rem;font-family:'DM Sans',sans-serif;font-weight:600;
+  border-radius:6px;cursor:pointer;border:1px solid var(--b1);
+  background:var(--s2);color:var(--muted);transition:all .15s}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm.danger:hover{border-color:var(--err);color:var(--err)}
+
+/* ── QR preview ── */
+.qr-box{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);
+  padding:1.2rem;text-align:center;display:none;flex-direction:column;
+  align-items:center;gap:.8rem;margin-top:1rem}
+.qr-box canvas,.qr-box img{border-radius:6px}
+
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin-bottom:1.5rem}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:var(--s1);border:1px solid var(--b1);border-radius:8px;
+  padding:.9rem 1rem}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;line-height:1;color:var(--accent2)}
+.stat-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-top:.2rem}
+
+/* ── Toolbar lista ── */
+.toolbar{display:flex;gap:.6rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
+.search{flex:1;min-width:180px;background:var(--s1);border:1px solid var(--b1);
+  border-radius:7px;color:var(--tx);padding:.5rem .85rem;
+  font-family:'DM Sans',sans-serif;font-size:.88rem;outline:none}
+.search:focus{border-color:var(--accent)}
+.filter-group{display:flex;gap:3px;background:var(--s1);border:1px solid var(--b1);
+  border-radius:8px;padding:3px}
+.ftab{padding:.25rem .7rem;border-radius:5px;font-size:.72rem;font-weight:600;
+  cursor:pointer;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;
+  border:none;background:none;transition:all .12s}
+.ftab.on{background:var(--accent);color:#fff}
+.ftab:hover:not(.on){color:var(--tx)}
+
+/* ── Coupon cards grid ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:1rem}
+.ccard{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);
+  overflow:hidden;transition:transform .18s,box-shadow .18s;position:relative}
+.ccard:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.ccard.used{opacity:.45}
+.ccard.used::after,.ccard.expired::after{
+  content:attr(data-stamp);position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%) rotate(-18deg);
+  font-family:'Bebas Neue',sans-serif;font-size:2.2rem;
+  border:3px solid currentColor;padding:.1rem .6rem;border-radius:4px;
+  pointer-events:none;opacity:.7;letter-spacing:.1em}
+.ccard.used::after{color:var(--info);content:'USATO'}
+.ccard.expired::after{color:var(--err);content:'SCADUTO';opacity:.6}
+.ccard.expired{opacity:.45}
+.cstripe{height:5px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.cbody{padding:1rem}
+.ctop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.7rem}
+.cdiscount{font-family:'Bebas Neue',sans-serif;font-size:2rem;line-height:1;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.cqr-mini{width:52px;height:52px;border-radius:5px;background:#fff;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
+.cqr-mini canvas,.cqr-mini img{width:100%!important;height:100%!important}
+.cname{font-weight:600;font-size:.9rem;margin-bottom:.15rem}
+.ccode{font-family:monospace;font-size:.72rem;color:var(--accent2);
+  background:rgba(255,179,0,.1);padding:.15rem .45rem;border-radius:4px;
+  display:inline-block;margin-bottom:.6rem}
+.cmeta{display:flex;gap:.4rem;flex-wrap:wrap}
+.badge{font-size:.65rem;padding:.18rem .5rem;border-radius:4px;
+  font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.b-active{background:rgba(0,230,118,.12);color:var(--ok);border:1px solid rgba(0,230,118,.25)}
+.b-expiring{background:rgba(255,179,0,.12);color:var(--warn);border:1px solid rgba(255,179,0,.25)}
+.b-expired{background:rgba(255,23,68,.12);color:var(--err);border:1px solid rgba(255,23,68,.25)}
+.b-used{background:rgba(41,182,246,.12);color:var(--info);border:1px solid rgba(41,182,246,.25)}
+.cfoot{border-top:1px solid var(--b1);padding:.6rem 1rem;display:flex;gap:.4rem;justify-content:flex-end}
+
+/* ── Empty ── */
+.empty{grid-column:1/-1;text-align:center;padding:3.5rem 1rem;color:var(--muted)}
+.empty-icon{font-size:2.5rem;margin-bottom:.8rem}
+.empty h3{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.1em;
+  color:var(--tx);margin-bottom:.4rem}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(10px);
+  z-index:1000;display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.on{opacity:1;pointer-events:all}
+.modal{background:var(--s1);border:1px solid var(--b1);border-radius:16px;
+  padding:1.8rem;max-width:400px;width:92%;text-align:center;
+  transform:scale(.95);transition:transform .2s}
+.overlay.on .modal{transform:scale(1)}
+.modal h2{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.1em;margin-bottom:1rem}
+.coupon-preview{background:#fff;color:#111;border-radius:10px;padding:1.2rem;margin:.8rem 0}
+.cp-discount{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;line-height:1;color:var(--accent)}
+.cp-name{font-size:1rem;font-weight:600;margin:.2rem 0}
+.cp-code{font-family:monospace;background:#f0f0f0;padding:.2rem .6rem;
+  border-radius:4px;font-size:.85rem;display:inline-block;margin:.4rem 0}
+.cp-exp{font-size:.7rem;color:#888;margin-top:.3rem}
+.modal-btns{display:flex;gap:.5rem;justify-content:center;margin-top:1rem;flex-wrap:wrap}
+.modal-btn{padding:.5rem 1.2rem;border-radius:7px;font-size:.8rem;font-weight:600;
+  cursor:pointer;border:1px solid var(--b1);background:var(--s2);color:var(--tx);transition:all .15s}
+.modal-btn.primary{background:linear-gradient(135deg,var(--accent),#ff7c00);border-color:transparent;color:#fff}
+.modal-btn:hover:not(.primary){border-color:var(--accent2);color:var(--accent2)}
+
+/* ══════════════════════════════════════
+   SCANNER VIEW
+══════════════════════════════════════ */
+.scanner-wrap{max-width:500px;margin:0 auto}
+.scanner-box{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);
+  overflow:hidden;position:relative}
+.cam-area{position:relative;background:#000;aspect-ratio:1}
+#cam-video{width:100%;height:100%;object-fit:cover;display:block}
+.scan-frame{position:absolute;inset:15%;border:2px solid var(--accent2);
+  border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:var(--accent2);
+  opacity:.8;animation:scan 2s ease-in-out infinite;top:0}
+@keyframes scan{0%,100%{top:15%} 50%{top:85%}}
+.scan-hint{text-align:center;padding:.9rem;font-size:.85rem;color:var(--muted)}
+
+.manual-area{padding:1rem 1.2rem;border-top:1px solid var(--b1)}
+.manual-row{display:flex;gap:.6rem}
+.manual-row input{flex:1}
+.manual-row .btn{width:auto;padding:.6rem 1.2rem;font-size:.85rem;font-family:'DM Sans',sans-serif;font-weight:600}
+
+/* Risultato scansione */
+.scan-result{margin-top:1.2rem;border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--b1);display:none}
+.scan-result.on{display:block}
+.result-header{padding:1.2rem 1.4rem;display:flex;align-items:center;gap:1rem}
+.result-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:1.5rem;flex-shrink:0}
+.result-icon.ok{background:rgba(0,230,118,.15)}
+.result-icon.no{background:rgba(255,23,68,.15)}
+.result-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.08em}
+.result-sub{font-size:.82rem;color:var(--muted);margin-top:.1rem}
+.result-body{background:var(--s2);padding:1rem 1.4rem;border-top:1px solid var(--b1)}
+.result-row{display:flex;justify-content:space-between;align-items:center;
+  padding:.4rem 0;border-bottom:1px solid var(--b1);font-size:.88rem}
+.result-row:last-child{border-bottom:none}
+.result-row span:first-child{color:var(--muted)}
+.result-row span:last-child{font-weight:600}
+.result-actions{padding:1rem 1.4rem;border-top:1px solid var(--b1);
+  display:flex;gap:.6rem;justify-content:flex-end}
+
+/* Scan history */
+.scan-hist{margin-top:1.2rem}
+.scan-hist-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--muted);margin-bottom:.6rem}
+.hist-item{display:flex;align-items:center;gap:.8rem;padding:.6rem .8rem;
+  background:var(--s1);border:1px solid var(--b1);border-radius:7px;margin-bottom:.4rem;font-size:.82rem}
+.hist-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.hist-dot.ok{background:var(--ok)}
+.hist-dot.no{background:var(--err)}
+.hist-code{font-family:monospace;font-weight:600}
+.hist-time{margin-left:auto;color:var(--muted);font-size:.72rem}
+
+/* ── Toast ── */
+.toasts{position:fixed;bottom:1.2rem;right:1.2rem;z-index:9999;
+  display:flex;flex-direction:column;gap:.4rem}
+.toast{background:var(--s2);border:1px solid var(--b1);border-left:3px solid var(--ok);
+  border-radius:8px;padding:.7rem 1.1rem;font-size:.82rem;min-width:200px;
+  animation:tin .3s,tout .3s 2.7s forwards}
+.toast.err{border-left-color:var(--err)}
+@keyframes tin{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes tout{from{opacity:1}to{opacity:0}}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- ────── TOPBAR ────── -->
+<div class="topbar">
+  <div class="logo">CouponQR</div>
+  <div class="tabs">
+    <button class="tab on" onclick="showView('gen')">Genera</button>
+    <button class="tab" onclick="showView('list')">Coupon</button>
+    <button class="tab" onclick="showView('scan')">📷 Scanner</button>
+  </div>
+  <div>
+    <span class="api-badge err" id="api-status">API ...</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW: GENERATORE
+══════════════════════════════════════ -->
+<div class="view on" id="view-gen">
+  <div class="gen-grid">
+
+    <!-- LEFT: form -->
+    <div>
+      <div class="panel">
+        <div class="panel-title">Nuovo Coupon</div>
+
+        <div class="field">
+          <label>Nome del Locale</label>
+          <input id="f-locale" placeholder="es. Pizzeria Roma" value="Il mio Locale">
+        </div>
+        <div class="field">
+          <label>Titolo Offerta</label>
+          <input id="f-titolo" placeholder="es. Aperitivo Gratis" value="Buono Sconto">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Sconto</label>
+            <input id="f-sconto" placeholder="es. 20%" value="15%">
+          </div>
+          <div class="field">
+            <label>Scadenza</label>
+            <input type="date" id="f-scad">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Utilizzi Max</label>
+            <input type="number" id="f-util" value="1" min="1">
+          </div>
+          <div class="field">
+            <label>Categoria</label>
+            <select id="f-cat">
+              <option>Cibo &amp; Bevande</option>
+              <option>Aperitivo</option>
+              <option>Dessert</option>
+              <option>Menu Completo</option>
+              <option>Altro</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Condizioni</label>
+          <input id="f-cond" placeholder="es. Valido lunedì–venerdì" value="Valido tutte le sere">
+        </div>
+
+        <div class="panel-title" style="margin-top:1.2rem">Colori QR</div>
+        <div class="row2">
+          <div class="field">
+            <label>Moduli QR</label>
+            <div class="color-wrap">
+              <input type="color" id="f-qrc" value="#1a1a2e">
+              <span>Colore</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>Sfondo QR</label>
+            <div class="color-wrap">
+              <input type="color" id="f-qrb" value="#ffffff">
+              <span>Sfondo</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="generate()">⚡ Genera Coupon</button>
+        <button class="btn btn-secondary" onclick="generateBatch()">📦 Genera 10 coupon</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: anteprima -->
+    <div>
+      <div class="panel">
+        <div class="panel-title">Anteprima</div>
+        <div class="qr-box" id="qr-preview" style="display:flex">
+          <div id="qrcode-prev"></div>
+          <div style="font-size:.78rem;color:var(--muted)">Il QR apparirà qui dopo la generazione</div>
+          <button class="btn btn-secondary" style="width:auto;padding:.45rem 1.1rem" onclick="dlPreview()">💾 Scarica PNG</button>
+        </div>
+      </div>
+
+      <!-- Config API -->
+      <div class="panel" style="margin-top:1rem">
+        <div class="panel-title">Configurazione API</div>
+        <div class="field">
+          <label>URL Backend (Render.com)</label>
+          <input id="api-url" placeholder="https://couponqr-backend.onrender.com" oninput="saveApi()">
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);line-height:1.6">
+          Inserisci l'URL del tuo backend su Render.com dopo averlo deployato.<br>
+          Lascia vuoto per lavorare offline (dati solo nel browser).
+        </div>
+        <button class="btn btn-secondary" style="margin-top:.8rem" onclick="testApi()">🔌 Testa connessione</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW: LISTA COUPON
+══════════════════════════════════════ -->
+<div class="view" id="view-list">
+  <div class="stats">
+    <div class="stat-card"><div class="stat-val" id="s-tot">0</div><div class="stat-lbl">Totale</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-act">0</div><div class="stat-lbl">Attivi</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-use">0</div><div class="stat-lbl">Usati</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-exp">0</div><div class="stat-lbl">Scaduti</div></div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search" type="text" placeholder="🔍 Cerca per codice, locale, sconto..." oninput="renderList()">
+    <div class="filter-group">
+      <button class="ftab on" data-f="all"      onclick="setFilter(this)">Tutti</button>
+      <button class="ftab"    data-f="active"   onclick="setFilter(this)">Attivi</button>
+      <button class="ftab"    data-f="expiring" onclick="setFilter(this)">In scadenza</button>
+      <button class="ftab"    data-f="used"     onclick="setFilter(this)">Usati</button>
+      <button class="ftab"    data-f="expired"  onclick="setFilter(this)">Scaduti</button>
+    </div>
+    <button class="btn-sm" onclick="loadFromApi()">🔄 Aggiorna</button>
+  </div>
+
+  <div class="grid" id="coupon-grid"></div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW: SCANNER CASSA
+══════════════════════════════════════ -->
+<div class="view" id="view-scan">
+  <div class="scanner-wrap">
+
+    <div class="scanner-box">
+      <!-- Camera -->
+      <div class="cam-area">
+        <video id="cam-video" playsinline autoplay muted></video>
+        <canvas id="cam-canvas" style="display:none"></canvas>
+        <div class="scan-frame"><div class="scan-line"></div></div>
+      </div>
+      <div class="scan-hint" id="scan-hint">
+        Premi "Avvia Scanner" per attivare la fotocamera
+      </div>
+
+      <!-- Manuale -->
+      <div class="manual-area">
+        <label style="display:block;margin-bottom:.5rem">Oppure inserisci il codice manualmente</label>
+        <div class="manual-row">
+          <input id="manual-code" placeholder="es. IL-A3F2K1" oninput="this.value=this.value.toUpperCase()"
+                 onkeydown="if(event.key==='Enter')validateManual()">
+          <button class="btn btn-primary" onclick="validateManual()">Valida</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottoni camera -->
+    <div style="display:flex;gap:.6rem;margin-top:.8rem">
+      <button class="btn btn-primary" id="btn-cam" onclick="toggleCamera()" style="flex:1">▶ Avvia Scanner</button>
+      <button class="btn btn-secondary" onclick="clearResult()" style="width:auto;padding:.6rem 1rem">✕ Reset</button>
+    </div>
+
+    <!-- Risultato -->
+    <div class="scan-result" id="scan-result"></div>
+
+    <!-- Storico scansioni -->
+    <div class="scan-hist" id="scan-hist" style="display:none">
+      <div class="scan-hist-title">Ultime scansioni di oggi</div>
+      <div id="hist-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── MODAL dettaglio ── -->
+<div class="overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal">
+    <h2 id="m-title">Coupon</h2>
+    <div id="m-coupon"></div>
+    <div id="m-qr" style="display:flex;justify-content:center;margin:.8rem 0"></div>
+    <div class="modal-btns">
+      <button class="modal-btn primary" onclick="dlModal()">💾 Scarica</button>
+      <button class="modal-btn" onclick="copyCode()">📋 Copia codice</button>
+      <button class="modal-btn" onclick="closeModal()">✕ Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- ══════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════ -->
+<script>
+// ── Config ──────────────────────────────
+let API_URL = localStorage.getItem('api_url') || '';
+document.getElementById('api-url').value = API_URL;
+
+// ── State ────────────────────────────────
+let coupons = JSON.parse(localStorage.getItem('coupons_v2') || '[]');
+let filter  = 'all';
+let searchQ = '';
+let modalCoupon = null;
+let camStream   = null;
+let scanActive  = false;
+let scanInterval = null;
+let scanHistory = [];
+
+// ── Init ─────────────────────────────────
+const d = new Date(); d.setDate(d.getDate()+30);
+document.getElementById('f-scad').value = d.toISOString().split('T')[0];
+
+checkApi();
+renderList();
+updateStats();
+
+// ── Views ────────────────────────────────
+function showView(v){
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.getElementById('view-'+v).classList.add('on');
+  document.querySelectorAll('.tab')[['gen','list','scan'].indexOf(v)].classList.add('on');
+  if(v==='list'){renderList();updateStats()}
+  if(v!=='scan'){stopCamera()}
+}
+
+// ── API helpers ──────────────────────────
+async function apiFetch(path, opts={}){
+  if(!API_URL) return null;
+  try{
+    const r = await fetch(API_URL.replace(/\/$/,'')+path, {
+      headers:{'Content-Type':'application/json'}, ...opts
+    });
+    return await r.json();
+  }catch(e){console.warn('API error',e);return null}
+}
+
+async function checkApi(){
+  const badge = document.getElementById('api-status');
+  if(!API_URL){badge.textContent='API offline';badge.className='api-badge err';return}
+  const data = await apiFetch('/');
+  if(data?.status==='ok'){badge.textContent='API online';badge.className='api-badge'}
+  else{badge.textContent='API offline';badge.className='api-badge err'}
+}
+
+async function testApi(){
+  toast('Test connessione...');
+  await checkApi();
+  const b = document.getElementById('api-status');
+  toast(b.classList.contains('err') ? 'API non raggiungibile ✗' : 'Connessione OK ✓',
+        b.classList.contains('err') ? 'err' : 'ok');
+}
+
+function saveApi(){
+  API_URL = document.getElementById('api-url').value.trim();
+  localStorage.setItem('api_url', API_URL);
+}
+
+async function loadFromApi(){
+  if(!API_URL){toast('Configura prima l\'URL del backend','err');return}
+  const data = await apiFetch('/api/coupons');
+  if(data&&Array.isArray(data)){
+    coupons = data; saveCoupons(); renderList(); updateStats();
+    toast(`${data.length} coupon caricati ✓`);
+  }else toast('Impossibile caricare dal backend','err');
+}
+
+// ── Generate ─────────────────────────────
+function mkCode(locale){
+  const p = (locale||'CP').replace(/[^A-Za-z]/g,'').substring(0,2).toUpperCase()||'CP';
+  return p+'-'+Math.random().toString(36).substr(2,6).toUpperCase();
+}
+
+function getStatus(c){
+  const now = new Date(), exp = new Date(c.scadenza);
+  if((c.used_count||0) >= (c.utilizzi||1)) return 'used';
+  if(now > exp) return 'expired';
+  if((exp-now)/(864e5) <= 7) return 'expiring';
+  return 'active';
+}
+
+async function generate(){
+  const locale=document.getElementById('f-locale').value.trim();
+  const titolo=document.getElementById('f-titolo').value.trim();
+  const sconto=document.getElementById('f-sconto').value.trim();
+  const scadenza=document.getElementById('f-scad').value;
+  if(!locale||!sconto||!scadenza){toast('Compila i campi obbligatori','err');return}
+
+  const c = {
+    id:Date.now()+'', code:mkCode(locale), locale, titolo:titolo||'Buono Sconto',
+    sconto, scadenza, utilizzi:parseInt(document.getElementById('f-util').value)||1,
+    used_count:0, categoria:document.getElementById('f-cat').value,
+    condizioni:document.getElementById('f-cond').value,
+    qr_color:document.getElementById('f-qrc').value,
+    qr_bg:document.getElementById('f-qrb').value,
+    created_at:new Date().toISOString()
+  };
+
+  // Prova a salvare sul backend
+  if(API_URL){
+    const res = await apiFetch('/api/coupons',{method:'POST',body:JSON.stringify({
+      locale:c.locale,titolo:c.titolo,sconto:c.sconto,scadenza:c.scadenza,
+      utilizzi:c.utilizzi,categoria:c.categoria,condizioni:c.condizioni,
+      qrColor:c.qr_color,qrBg:c.qr_bg
+    })});
+    if(res?.success) Object.assign(c, res.coupon);
+  }
+
+  coupons.unshift(c); saveCoupons();
+  renderPreview(c); updateStats();
+  toast(`Coupon ${c.code} creato ✓`);
+}
+
+async function generateBatch(){
+  const locale=document.getElementById('f-locale').value.trim()||'Locale';
+  const sconto=document.getElementById('f-sconto').value.trim()||'10%';
+  const scadenza=document.getElementById('f-scad').value;
+
+  if(API_URL){
+    const res = await apiFetch('/api/coupons/batch',{method:'POST',body:JSON.stringify({
+      n:10,locale,titolo:document.getElementById('f-titolo').value||'Buono Sconto',
+      sconto,scadenza,utilizzi:1,categoria:document.getElementById('f-cat').value,
+      condizioni:document.getElementById('f-cond').value,
+      qrColor:document.getElementById('f-qrc').value,
+      qrBg:document.getElementById('f-qrb').value
+    })});
+    if(res?.success){
+      res.coupons.forEach(x=>coupons.unshift(x));
+      saveCoupons();renderList();updateStats();
+      toast('10 coupon creati ✓');return;
+    }
+  }
+
+  for(let i=0;i<10;i++){
+    coupons.unshift({
+      id:Date.now()+i+'', code:mkCode(locale), locale,
+      titolo:document.getElementById('f-titolo').value||'Buono Sconto',
+      sconto, scadenza, utilizzi:1, used_count:0,
+      categoria:document.getElementById('f-cat').value,
+      condizioni:document.getElementById('f-cond').value,
+      qr_color:document.getElementById('f-qrc').value,
+      qr_bg:document.getElementById('f-qrb').value,
+      created_at:new Date().toISOString()
+    });
+  }
+  saveCoupons();renderList();updateStats();
+  toast('10 coupon creati (offline) ✓');
+}
+
+// ── Render QR ────────────────────────────
+function makeQR(container, c, size){
+  container.innerHTML='';
+  const data = JSON.stringify({code:c.code,locale:c.locale,sconto:c.sconto,exp:c.scadenza});
+  new QRCode(container,{text:data,width:size,height:size,
+    colorDark:c.qr_color||'#1a1a2e',colorLight:c.qr_bg||'#ffffff',
+    correctLevel:QRCode.CorrectLevel.H});
+}
+
+function renderPreview(c){
+  const box=document.getElementById('qr-preview');
+  box.style.display='flex';
+  makeQR(document.getElementById('qrcode-prev'), c, 170);
+  box._coupon=c;
+}
+
+function dlPreview(){
+  const box=document.getElementById('qr-preview');
+  const c=box._coupon; if(!c) return;
+  // Se backend disponibile, scarica la card completa
+  if(API_URL){
+    window.open(`${API_URL.replace(/\/$/,'')}/api/coupons/${c.code}/qr`,'_blank');
+    return;
+  }
+  const canvas=box.querySelector('canvas');
+  if(!canvas){toast('Genera prima un coupon','err');return}
+  const a=document.createElement('a');
+  a.download=`coupon-${c.code}.png`;a.href=canvas.toDataURL();a.click();
+}
+
+// ── List ─────────────────────────────────
+function renderList(){
+  const grid=document.getElementById('coupon-grid');
+  const q=(document.querySelector('.search')?.value||'').toLowerCase();
+  const f=filter;
+  let list=coupons.filter(c=>{
+    const s=getStatus(c);
+    if(f!=='all'&&s!==f) return false;
+    if(q&&!c.code.toLowerCase().includes(q)&&
+        !c.locale.toLowerCase().includes(q)&&
+        !c.sconto.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  if(!list.length){
+    grid.innerHTML=`<div class="empty"><div class="empty-icon">🎫</div>
+      <h3>Nessun coupon</h3><p>Nessun coupon corrisponde ai filtri.</p></div>`;
+    return;
+  }
+  grid.innerHTML=list.map(c=>{
+    const s=getStatus(c);
+    const bCls={active:'b-active',expiring:'b-expiring',expired:'b-expired',used:'b-used'}[s]||'b-active';
+    const bLbl={active:'Attivo',expiring:'In scadenza',expired:'Scaduto',used:'Usato'}[s];
+    const exp=new Date(c.scadenza).toLocaleDateString('it-IT');
+    const stripe=`linear-gradient(90deg,${c.qr_color||'#1a1a2e'},${c.qr_bg==='#ffffff'?'#ffb300':c.qr_bg})`;
+    return `<div class="ccard ${s}" data-stamp="${bLbl.toUpperCase()}">
+      <div class="cstripe" style="background:${stripe}"></div>
+      <div class="cbody">
+        <div class="ctop">
+          <div>
+            <div class="cdiscount">${c.sconto}</div>
+            <div class="cname">${c.locale}</div>
+            <div class="ccode">${c.code}</div>
+          </div>
+          <div class="cqr-mini" id="qm-${c.id||c.code}"></div>
+        </div>
+        <div class="cmeta">
+          <span class="badge ${bCls}">${bLbl}</span>
+          <span class="badge" style="background:var(--s2);border:1px solid var(--b1);color:var(--muted)">
+            ${exp}</span>
+          <span class="badge" style="background:var(--s2);border:1px solid var(--b1);color:var(--muted)">
+            ${c.utilizzi-c.used_count}/${c.utilizzi} rimasti</span>
+        </div>
+      </div>
+      <div class="cfoot">
+        <button class="btn-sm" onclick="openModal('${c.id||c.code}')">👁 Vedi</button>
+        <button class="btn-sm" onclick="dlCoupon('${c.id||c.code}')">💾</button>
+        <button class="btn-sm danger" onclick="delCoupon('${c.id||c.code}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  setTimeout(()=>{
+    list.forEach(c=>{
+      const el=document.getElementById(`qm-${c.id||c.code}`);
+      if(el&&!el.children.length) makeQR(el,c,52);
+    });
+  },40);
+}
+
+function setFilter(el){
+  filter=el.dataset.f;
+  document.querySelectorAll('.ftab').forEach(x=>x.classList.remove('on'));
+  el.classList.add('on');
+  renderList();
+}
+
+function updateStats(){
+  const t=coupons.length;
+  const a=coupons.filter(c=>getStatus(c)==='active').length;
+  const u=coupons.filter(c=>getStatus(c)==='used').length;
+  const e=coupons.filter(c=>getStatus(c)==='expired').length;
+  document.getElementById('s-tot').textContent=t;
+  document.getElementById('s-act').textContent=a;
+  document.getElementById('s-use').textContent=u;
+  document.getElementById('s-exp').textContent=e;
+}
+
+// ── Modal ────────────────────────────────
+function openModal(id){
+  const c=coupons.find(x=>(x.id||x.code)===id); if(!c) return;
+  modalCoupon=c;
+  document.getElementById('m-title').textContent=c.titolo;
+  const exp=new Date(c.scadenza).toLocaleDateString('it-IT');
+  document.getElementById('m-coupon').innerHTML=`
+    <div class="coupon-preview">
+      <div style="font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.08em">${c.locale}</div>
+      <div class="cp-discount">${c.sconto}</div>
+      <div class="cp-name">${c.titolo}</div>
+      <div class="cp-code">${c.code}</div>
+      <div class="cp-exp">📅 ${exp} · ${c.condizioni||''}</div>
+    </div>`;
+  makeQR(document.getElementById('m-qr'),c,180);
+  document.getElementById('modal').classList.add('on');
+}
+function closeModal(e){
+  if(!e||e.target===document.getElementById('modal'))
+    document.getElementById('modal').classList.remove('on');
+}
+function copyCode(){
+  if(!modalCoupon) return;
+  navigator.clipboard.writeText(modalCoupon.code);
+  toast('Codice copiato ✓');
+}
+function dlModal(){
+  if(!modalCoupon) return;
+  if(API_URL){window.open(`${API_URL.replace(/\/$/,'')}/api/coupons/${modalCoupon.code}/qr`,'_blank');return}
+  const c=document.querySelector('#m-qr canvas');
+  if(!c) return;
+  const a=document.createElement('a');
+  a.download=`coupon-${modalCoupon.code}.png`;a.href=c.toDataURL();a.click();
+}
+function dlCoupon(id){openModal(id);setTimeout(dlModal,300)}
+async function delCoupon(id){
+  if(!confirm('Eliminare questo coupon?')) return;
+  if(API_URL) await apiFetch(`/api/coupons/${id}`,{method:'DELETE'});
+  coupons=coupons.filter(c=>(c.id||c.code)!==id);
+  saveCoupons();renderList();updateStats();
+  toast('Coupon eliminato');
+}
+
+// ══════════════════════════════════════
+// SCANNER
+// ══════════════════════════════════════
+async function toggleCamera(){
+  if(scanActive){stopCamera();return}
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment',width:{ideal:640},height:{ideal:640}}
+    });
+    camStream=stream;
+    const vid=document.getElementById('cam-video');
+    vid.srcObject=stream; await vid.play();
+    scanActive=true;
+    document.getElementById('btn-cam').textContent='⏹ Ferma Scanner';
+    document.getElementById('scan-hint').textContent='Punta il QR code — rilevamento automatico';
+    startScanLoop();
+  }catch(e){
+    toast('Fotocamera non accessibile. Usa inserimento manuale.','err');
+  }
+}
+
+function stopCamera(){
+  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null}
+  clearInterval(scanInterval);scanActive=false;
+  document.getElementById('btn-cam').textContent='▶ Avvia Scanner';
+  document.getElementById('scan-hint').textContent='Premi "Avvia Scanner" per attivare la fotocamera';
+}
+
+function startScanLoop(){
+  const vid=document.getElementById('cam-video');
+  const canvas=document.getElementById('cam-canvas');
+  const ctx=canvas.getContext('2d');
+  let lastCode='';let cooldown=0;
+
+  scanInterval=setInterval(()=>{
+    if(!scanActive||vid.readyState<2) return;
+    if(cooldown>0){cooldown--;return}
+    canvas.width=vid.videoWidth;canvas.height=vid.videoHeight;
+    ctx.drawImage(vid,0,0);
+    const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const qr=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+    if(qr){
+      let code=qr.data;
+      // Prova a parsare il JSON del QR
+      try{const j=JSON.parse(qr.data);code=j.code||code}catch(e){}
+      if(code!==lastCode){
+        lastCode=code; cooldown=30; // pausa ~3s
+        runValidation(code);
+      }
+    }
+  },100);
+}
+
+function validateManual(){
+  const v=document.getElementById('manual-code').value.trim();
+  if(!v){toast('Inserisci un codice','err');return}
+  runValidation(v);
+}
+
+async function runValidation(code){
+  document.getElementById('scan-hint').textContent=`Validazione ${code}...`;
+
+  let result=null;
+
+  // Prima prova il backend
+  if(API_URL){
+    result = await apiFetch(`/api/coupons/${code}/validate`,{method:'POST'});
+  }
+
+  // Fallback: validazione locale
+  if(!result){
+    const c=coupons.find(x=>x.code===code.toUpperCase());
+    if(!c){
+      result={valid:false,reason:'Codice non trovato'};
+    } else {
+      const s=getStatus(c);
+      if(s==='used')     result={valid:false,reason:'Coupon già utilizzato',coupon:c};
+      else if(s==='expired') result={valid:false,reason:'Coupon scaduto',coupon:c};
+      else {
+        // Marca usato in locale
+        c.used_count=(c.used_count||0)+1;
+        c.used_at=new Date().toISOString();
+        saveCoupons();renderList();updateStats();
+        result={valid:true,coupon:c,message:`✓ Valido! Sconto: ${c.sconto}`};
+      }
+    }
+  } else if(result.valid && !API_URL){
+    // sync locale
+    const c=coupons.find(x=>x.code===code.toUpperCase());
+    if(c){c.used_count=(c.used_count||0)+1;saveCoupons();renderList();updateStats()}
+  }
+
+  showScanResult(code, result);
+  addHistory(code, result.valid);
+
+  if(scanActive) document.getElementById('scan-hint').textContent='Punta il prossimo QR code';
+}
+
+function showScanResult(code, res){
+  const el=document.getElementById('scan-result');
+  el.classList.add('on');
+  const c=res.coupon||{};
+  const ok=res.valid;
+  const exp=c.scadenza?new Date(c.scadenza).toLocaleDateString('it-IT'):'—';
+  const rimasti = c.utilizzi!=null
+    ? `${c.utilizzi - (c.used_count||0)}/${c.utilizzi}`
+    : '—';
+
+  el.innerHTML=`
+    <div class="result-header">
+      <div class="result-icon ${ok?'ok':'no'}">${ok?'✓':'✗'}</div>
+      <div>
+        <div class="result-title" style="color:${ok?'var(--ok)':'var(--err)'}">${ok?'VALIDO':'NON VALIDO'}</div>
+        <div class="result-sub">${res.reason||res.message||''}</div>
+      </div>
+    </div>
+    ${c.code?`<div class="result-body">
+      <div class="result-row"><span>Codice</span><span>${c.code}</span></div>
+      <div class="result-row"><span>Locale</span><span>${c.locale||'—'}</span></div>
+      <div class="result-row"><span>Sconto</span><span style="color:var(--accent2);font-size:1.1rem">${c.sconto||'—'}</span></div>
+      <div class="result-row"><span>Scadenza</span><span>${exp}</span></div>
+      <div class="result-row"><span>Utilizzi rimasti</span><span>${rimasti}</span></div>
+      ${c.condizioni?`<div class="result-row"><span>Condizioni</span><span>${c.condizioni}</span></div>`:''}
+    </div>`:''}
+    <div class="result-actions">
+      <button class="btn-sm" onclick="clearResult()">✕ Chiudi</button>
+    </div>`;
+}
+
+function clearResult(){
+  document.getElementById('scan-result').classList.remove('on');
+  document.getElementById('scan-result').innerHTML='';
+  document.getElementById('manual-code').value='';
+}
+
+function addHistory(code, ok){
+  const now=new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  scanHistory.unshift({code,ok,time:now});
+  if(scanHistory.length>10) scanHistory.pop();
+  const hist=document.getElementById('scan-hist');
+  const list=document.getElementById('hist-list');
+  hist.style.display='block';
+  list.innerHTML=scanHistory.map(h=>`
+    <div class="hist-item">
+      <div class="hist-dot ${h.ok?'ok':'no'}"></div>
+      <span class="hist-code">${h.code}</span>
+      <span style="color:var(--muted);font-size:.75rem">${h.ok?'Validato':'Rifiutato'}</span>
+      <span class="hist-time">${h.time}</span>
+    </div>`).join('');
+}
+
+// ── Utils ────────────────────────────────
+function saveCoupons(){localStorage.setItem('coupons_v2',JSON.stringify(coupons))}
+function toast(msg,type='ok'){
+  const el=document.createElement('div');
+  el.className=`toast ${type==='err'?'err':''}`;
+  el.textContent=msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>el.remove(),3300);
+}
+</script>
+</body>
+</html>
